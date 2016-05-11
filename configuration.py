@@ -3,9 +3,11 @@
 from trytond.pool import PoolMeta, Pool
 from trytond.model import fields
 from trytond.pyson import Eval
+from trytond import backend
+from trytond.transaction import Transaction
 
 
-__all__ = ['Configuration']
+__all__ = ['Configuration', 'ProductConfiguration']
 
 
 class Configuration:
@@ -60,3 +62,34 @@ class Configuration:
                     ], limit=1)
             return field
         return super(Configuration, cls)._get_account_field(name)
+
+
+class ProductConfiguration:
+    __metaclass__ = PoolMeta
+    __name__ = 'product.configuration'
+
+    default_accounts_category = fields.Boolean(
+        'Use Category\'s accounts by default')
+    default_taxes_category = fields.Boolean(
+        'Use Category\' taxes by default')
+
+    @classmethod
+    def __register__(cls, module_name):
+        TableHandler = backend.get('TableHandler')
+
+        # Migration from 3.8: rename default_account_category into
+        # default_accounts_category
+        table = TableHandler(cls, module_name)
+        if table.column_exist('default_account_category'):
+            table.column_rename('default_account_category',
+                'default_accounts_category', exception=True)
+
+        super(ProductConfiguration, cls).__register__(module_name)
+
+    @classmethod
+    def default_default_accounts_category(cls):
+        return False
+
+    @classmethod
+    def default_default_taxes_category(cls):
+        return False
