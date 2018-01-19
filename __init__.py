@@ -4,6 +4,7 @@
 from trytond.pool import Pool
 from .product import *
 from .configuration import *
+from . import account
 
 
 def register():
@@ -13,11 +14,17 @@ def register():
         CategoryAccount,
         CategoryCustomerTax,
         CategorySupplierTax,
+        account.CreateChartProperties,
         Template,
         TemplateAccount,
         TemplateCustomerTax,
         TemplateSupplierTax,
         Product,
+        TemplateAccountCategory,
+        TemplateCategoryAll,
         Configuration,
         ConfigurationDefaultAccount,
         module='account_product', type_='model')
+    Pool.register(
+        account.CreateChart,
+        module='account_product', type_='wizard')
