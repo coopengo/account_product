@@ -28,16 +28,14 @@ def account_used(field_name):
             account = func(self)
             if not account:
                 account = self.get_account(field_name + '_used')
-            if not account:
-                # Template message does not have keywords
-                if self.__class__.__name__ == 'product.template':
-                    self.raise_user_error('missing_account', (
-                        self.name, self.id))
-                else:
-                    self.raise_user_error('missing_account', {
-                            'name': self.name,
-                            'id': self.id,
-                            })
+            # Allow empty values on on_change
+            if not account and not Transaction().readonly:
+                field_string = (
+                    self.fields_get([field_name])[field_name]['string'])
+                self.raise_user_error('missing_account', {
+                        'field': field_string,
+                        'name': self.rec_name,
+                        })
             return account
         return wrapper
     return decorator
@@ -58,7 +56,7 @@ class Category(CompanyMultiValueMixin):
             'readonly': Bool(Eval('childs', [0])) | Bool(Eval('parent')),
             },
         depends=['parent'],
-        help="Check to convert into accouting category.")
+        help="Check to convert into accounting category.")
     account_parent = fields.Boolean('Use Parent\'s accounts',
         states={
             'invisible': ~Eval('accounting', False),
@@ -132,9 +130,8 @@ class Category(CompanyMultiValueMixin):
     def __setup__(cls):
         super(Category, cls).__setup__()
         cls._error_messages.update({
-            'missing_account': ('There is no account '
-                    'expense/revenue defined on the category '
-                    '%(name)s (%(id)d)'),
+            'missing_account': ('There is no '
+                    '"%(field)s" defined on the category "%(name)s"'),
             })
         cls.parent.domain = [
             ('accounting', '=', Eval('accounting', False)),
@@ -380,8 +377,8 @@ class Template(CompanyMultiValueMixin):
     def __setup__(cls):
         super(Template, cls).__setup__()
         cls._error_messages.update({
-                'missing_account': ('There is no account '
-                    'expense/revenue defined on the product %s (%d)'),
+                'missing_account': ('There is no '
+                    '"%(field)s" defined on the product "%(name)s"'),
                 })
 
     @classmethod
