@@ -10,8 +10,7 @@ __all__ = ['Configuration', 'ConfigurationDefaultAccount',
     'ProductConfiguration']
 
 
-class Configuration:
-    __metaclass__ = PoolMeta
+class Configuration(metaclass=PoolMeta):
     __name__ = 'account.configuration'
 
     default_product_account_expense = fields.MultiValue(fields.Many2One(
@@ -50,8 +49,7 @@ class Configuration:
         return super(Configuration, cls).multivalue_model(field)
 
 
-class ConfigurationDefaultAccount:
-    __metaclass__ = PoolMeta
+class ConfigurationDefaultAccount(metaclass=PoolMeta):
     __name__ = 'account.configuration.default_account'
     default_product_account_expense = fields.Many2One(
         'account.account', "Default Account Expense",
@@ -83,8 +81,7 @@ class ConfigurationDefaultAccount:
         depends=['company'])
 
 
-class ProductConfiguration:
-    __metaclass__ = PoolMeta
+class ProductConfiguration(metaclass=PoolMeta):
     __name__ = 'product.configuration'
 
     default_accounts_category = fields.Boolean(
