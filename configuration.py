@@ -3,28 +3,14 @@
 from trytond.pool import PoolMeta, Pool
 from trytond.model import fields
 from trytond.pyson import Eval
-from trytond import backend
 
 
-__all__ = ['Configuration', 'ConfigurationDefaultAccount',
-    'ProductConfiguration']
+__all__ = ['Configuration', 'ConfigurationDefaultAccount']
 
 
 class Configuration(metaclass=PoolMeta):
     __name__ = 'account.configuration'
 
-    default_product_account_expense = fields.MultiValue(fields.Many2One(
-            'account.account', 'Default Account Expense',
-            domain=[
-                ('kind', '=', 'expense'),
-                ('company', '=', Eval('context', {}).get('company', -1)),
-                ]))
-    default_product_account_revenue = fields.MultiValue(fields.Many2One(
-            'account.account', 'Default Account Revenue',
-            domain=[
-                ('kind', '=', 'revenue'),
-                ('company', '=', Eval('context', {}).get('company', -1)),
-                ]))
     default_category_account_expense = fields.MultiValue(fields.Many2One(
             'account.account', 'Default Account Expense',
             domain=[
@@ -41,9 +27,7 @@ class Configuration(metaclass=PoolMeta):
     @classmethod
     def multivalue_model(cls, field):
         pool = Pool()
-        if field in {'default_product_account_expense',
-                'default_product_account_revenue',
-                'default_category_account_expense',
+        if field in {'default_category_account_expense',
                 'default_category_account_revenue'}:
             return pool.get('account.configuration.default_account')
         return super(Configuration, cls).multivalue_model(field)
@@ -51,20 +35,6 @@ class Configuration(metaclass=PoolMeta):
 
 class ConfigurationDefaultAccount(metaclass=PoolMeta):
     __name__ = 'account.configuration.default_account'
-    default_product_account_expense = fields.Many2One(
-        'account.account', "Default Account Expense",
-        domain=[
-            ('kind', '=', 'expense'),
-            ('company', '=', Eval('company', -1)),
-            ],
-        depends=['company'])
-    default_product_account_revenue = fields.Many2One(
-        'account.account', "Default Account Revenue",
-        domain=[
-            ('kind', '=', 'revenue'),
-            ('company', '=', Eval('company', -1)),
-            ],
-        depends=['company'])
     default_category_account_expense = fields.Many2One(
         'account.account', "Default Account Expense",
         domain=[

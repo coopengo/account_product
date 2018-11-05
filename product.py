@@ -15,13 +15,14 @@ from trytond.modules.company.model import (
 
 __all__ = ['Category', 'CategoryAccount',
     'CategoryCustomerTax', 'CategorySupplierTax',
-    'Template', 'TemplateAccount',
-    'TemplateCustomerTax', 'TemplateSupplierTax',
-    'Product', 'account_used', 'template_property',
+    'Template', 'Product', 'account_used', 'template_property',
     'TemplateAccountCategory', 'TemplateCategoryAll']
 
 
-def account_used(field_name):
+def account_used(field_name, field_string=None):
+    if field_string is None:
+        field_string = field_name
+
     def decorator(func):
         @wraps(func)
         def wrapper(self):
@@ -30,13 +31,14 @@ def account_used(field_name):
                 account = self.get_account(field_name + '_used')
             # Allow empty values on on_change
             if not account and not Transaction().readonly:
-                field_string = (
-                    self.fields_get([field_name])[field_name]['string'])
+                field = (
+                    self.fields_get([field_string])[field_string]['string'])
                 self.raise_user_error('missing_account', {
-                        'field': field_string,
+                        'field': field,
                         'name': self.rec_name,
                         })
-            return account
+            if account:
+                return account.current()
         return wrapper
     return decorator
 
@@ -270,17 +272,6 @@ class CategoryCustomerTax(ModelSQL):
     tax = fields.Many2One('account.tax', 'Tax', ondelete='RESTRICT',
             required=True)
 
-    @classmethod
-    def __register__(cls, module_name):
-        TableHandler = backend.get('TableHandler')
-        # Migration from 1.6 product renamed into category
-        table = TableHandler(cls)
-        if table.column_exist('product'):
-            table.index_action('product', action='remove')
-            table.drop_fk('product')
-            table.column_rename('product', 'category')
-        super(CategoryCustomerTax, cls).__register__(module_name)
-
 
 class CategorySupplierTax(ModelSQL):
     'Category - Supplier Tax'
@@ -291,85 +282,13 @@ class CategorySupplierTax(ModelSQL):
     tax = fields.Many2One('account.tax', 'Tax', ondelete='RESTRICT',
             required=True)
 
-    @classmethod
-    def __register__(cls, module_name):
-        TableHandler = backend.get('TableHandler')
-        # Migration from 1.6 product renamed into category
-        table = TableHandler(cls)
-        if table.column_exist('product'):
-            table.index_action('product', action='remove')
-            table.drop_fk('product')
-            table.column_rename('product', 'category')
-        super(CategorySupplierTax, cls).__register__(module_name)
-
 
 class Template(CompanyMultiValueMixin, metaclass=PoolMeta):
     __name__ = 'product.template'
     account_category = fields.Many2One('product.category', 'Account Category',
         domain=[
             ('accounting', '=', True),
-            ],
-        states={
-            'required': (Eval('accounts_category', False)
-                | Eval('taxes_category', False)),
-            },
-        depends=['accounts_category', 'taxes_category'])
-    accounts_category = fields.Boolean('Use Category\'s accounts',
-            help="Check to use the accounts defined on the account category.")
-    accounts = fields.One2Many(
-        'product.template.account', 'template', "Accounts")
-    account_expense = fields.MultiValue(fields.Many2One('account.account',
-            'Account Expense', domain=[
-                ('kind', '=', 'expense'),
-                ('company', '=', Eval('context', {}).get('company', -1)),
-                ],
-            states={
-                'invisible': (~Eval('context', {}).get('company')
-                    | Eval('accounts_category')),
-                },
-            help=("The account to use instead of the one defined on the "
-                "account category."), depends=['accounts_category']))
-    account_revenue = fields.MultiValue(fields.Many2One('account.account',
-            'Account Revenue', domain=[
-                ('kind', '=', 'revenue'),
-                ('company', '=', Eval('context', {}).get('company', -1)),
-                ],
-            states={
-                'invisible': (~Eval('context', {}).get('company')
-                    | Eval('accounts_category')),
-                },
-            help=("The account to use instead of the one defined on the "
-                "account category."), depends=['accounts_category']))
-    taxes_category = fields.Boolean('Use Category\'s Taxes',
-            help="Check to use the taxes defined on the account category.")
-    customer_taxes = fields.Many2Many('product.template-customer-account.tax',
-        'product', 'tax', 'Customer Taxes',
-        order=[('tax.sequence', 'ASC'), ('tax.id', 'ASC')],
-        domain=[('parent', '=', None), ['OR',
-                ('group', '=', None),
-                ('group.kind', 'in', ['sale', 'both'])],
-            ],
-        states={
-            'invisible': (~Eval('context', {}).get('company')
-                | Eval('taxes_category')),
-            }, depends=['taxes_category'],
-        help="The taxes to apply when selling the product.")
-    supplier_taxes = fields.Many2Many('product.template-supplier-account.tax',
-        'product', 'tax', 'Supplier Taxes',
-        order=[('tax.sequence', 'ASC'), ('tax.id', 'ASC')],
-        domain=[('parent', '=', None), ['OR',
-                ('group', '=', None),
-                ('group.kind', 'in', ['purchase', 'both'])],
-            ],
-        states={
-            'invisible': (~Eval('context', {}).get('company')
-                | Eval('taxes_category')),
-            }, depends=['taxes_category'],
-        help="The taxes to apply when purchasing the product.")
-    customer_taxes_used = fields.Function(fields.One2Many('account.tax', None,
-        'Customer Taxes Used'), 'get_taxes')
-    supplier_taxes_used = fields.Function(fields.One2Many('account.tax', None,
-        'Supplier Taxes Used'), 'get_taxes')
+            ])
 
     @classmethod
     def __setup__(cls):
@@ -377,109 +296,40 @@ class Template(CompanyMultiValueMixin, metaclass=PoolMeta):
         cls._error_messages.update({
                 'missing_account': ('There is no '
                     '"%(field)s" defined on the product "%(name)s"'),
+                'missing_taxes': ('There is no account category defined '
+                    'on the product "%(name)s"'),
                 })
 
-    @classmethod
-    def __register__(cls, module_name):
-        TableHandler = backend.get('TableHandler')
-        cursor = Transaction().connection.cursor()
-        pool = Pool()
-        Category = pool.get('product.category')
-        sql_table = cls.__table__()
-        category = Category.__table__()
-
-        table = TableHandler(cls, module_name)
-        category_exists = table.column_exist('category')
-
-        # Migration from 3.8: rename account_category into accounts_category
-        if (table.column_exist('account_category')
-                and not table.column_exist('accounts_category')):
-            table.column_rename('account_category', 'accounts_category')
-
-        super(Template, cls).__register__(module_name)
-
-        # Migration from 3.8: duplicate category into account_category
-        if category_exists:
-            # Only accounting category until now
-            cursor.execute(*category.update([category.accounting], [True]))
-            cursor.execute(*sql_table.update(
-                    [sql_table.account_category],
-                    [sql_table.category]))
-
-    @classmethod
-    def multivalue_model(cls, field):
-        pool = Pool()
-        if field in {'account_expense', 'account_revenue'}:
-            return pool.get('product.template.account')
-        return super(Template, cls).multivalue_model(field)
-
-    @classmethod
-    def default_account_expense(cls, **pattern):
-        pool = Pool()
-        Configuration = pool.get('account.configuration')
-        config = Configuration(1)
-        account = config.get_multivalue(
-            'default_product_account_expense', **pattern)
-        return account.id if account else None
-
-    @classmethod
-    def default_account_revenue(cls, **pattern):
-        pool = Pool()
-        Configuration = pool.get('account.configuration')
-        config = Configuration(1)
-        account = config.get_multivalue(
-            'default_product_account_revenue', **pattern)
-        return account.id if account else None
-
-    @classmethod
-    def default_accounts_category(cls):
-        pool = Pool()
-        Config = pool.get('product.configuration')
-        return Config(1).default_accounts_category
-
-    @classmethod
-    def default_taxes_category(cls):
-        pool = Pool()
-        Config = pool.get('product.configuration')
-        return Config(1).default_taxes_category
-
     def get_account(self, name, **pattern):
-        if self.accounts_category:
+        if self.account_category:
             return self.account_category.get_account(name, **pattern)
-        else:
-            return self.get_multivalue(name[:-5], **pattern)
 
     def get_taxes(self, name):
-        if self.taxes_category:
-            return [x.id for x in getattr(self.account_category, name)]
-        else:
-            return [x.id for x in getattr(self, name[:-5])]
-
-    @fields.depends('account_category', 'account_expense')
-    def on_change_account_expense(self):
-        if not self.account_category:
-            if self.account_expense:
-                self.supplier_taxes = self.account_expense.taxes
-            else:
-                self.supplier_taxes = []
-
-    @fields.depends('account_category', 'account_revenue')
-    def on_change_account_revenue(self):
-        if not self.account_category:
-            if self.account_revenue:
-                self.customer_taxes = self.account_revenue.taxes
-            else:
-                self.customer_taxes = []
+        if self.account_category:
+            return getattr(self.account_category, name)
 
     @property
-    @account_used('account_expense')
+    @account_used('account_expense', 'account_category')
     def account_expense_used(self):
         pass
 
     @property
-    @account_used('account_revenue')
+    @account_used('account_revenue', 'account_category')
     def account_revenue_used(self):
         pass
+
+    @property
+    def customer_taxes_used(self):
+        taxes = self.get_taxes('customer_taxes_used')
+        if taxes is None:
+            account = self.account_revenue_used
+            if account:
+                taxes = account.taxes
+        if taxes is None:
+            self.raise_user_error('missing_taxes', {
+                    'name': self.rec_name,
+                    })
+        return taxes
 
 
 class TemplateAccount(ModelSQL, CompanyValueMixin):
@@ -541,15 +391,26 @@ class TemplateSupplierTax(ModelSQL):
     tax = fields.Many2One('account.tax', 'Tax', ondelete='RESTRICT',
             required=True)
 
+    @property
+    def supplier_taxes_used(self):
+        taxes = self.get_taxes('supplier_taxes_used')
+        if taxes is None:
+            account = self.account_expense_used
+            if account:
+                taxes = account.taxes
+        if taxes is None:
+            self.raise_user_error('missing_taxes', {
+                    'name': self.rec_name,
+                    })
+        return taxes
+
 
 class Product(metaclass=PoolMeta):
     __name__ = 'product.product'
     account_expense_used = template_property('account_expense_used')
     account_revenue_used = template_property('account_revenue_used')
-    customer_taxes_used = fields.Function(fields.One2Many('account.tax', None,
-            'Customer Taxes Used'), 'get_template')
-    supplier_taxes_used = fields.Function(fields.One2Many('account.tax', None,
-            'Supplier Taxes Used'), 'get_template')
+    customer_taxes_used = template_property('customer_taxes_used')
+    supplier_taxes_used = template_property('supplier_taxes_used')
 
 
 class TemplateAccountCategory(ModelSQL):
