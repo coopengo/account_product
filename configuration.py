@@ -49,33 +49,3 @@ class ConfigurationDefaultAccount(metaclass=PoolMeta):
             ('company', '=', Eval('company', -1)),
             ],
         depends=['company'])
-
-
-class ProductConfiguration(metaclass=PoolMeta):
-    __name__ = 'product.configuration'
-
-    default_accounts_category = fields.Boolean(
-        'Use Category\'s accounts by default')
-    default_taxes_category = fields.Boolean(
-        'Use Category\' taxes by default')
-
-    @classmethod
-    def __register__(cls, module_name):
-        TableHandler = backend.get('TableHandler')
-
-        # Migration from 3.8: rename default_account_category into
-        # default_accounts_category
-        table = TableHandler(cls, module_name)
-        if table.column_exist('default_account_category'):
-            table.column_rename(
-                'default_account_category', 'default_accounts_category')
-
-        super(ProductConfiguration, cls).__register__(module_name)
-
-    @classmethod
-    def default_default_accounts_category(cls):
-        return False
-
-    @classmethod
-    def default_default_taxes_category(cls):
-        return False

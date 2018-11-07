@@ -331,66 +331,6 @@ class Template(CompanyMultiValueMixin, metaclass=PoolMeta):
                     })
         return taxes
 
-
-class TemplateAccount(ModelSQL, CompanyValueMixin):
-    "Product Template Account"
-    __name__ = 'product.template.account'
-    template = fields.Many2One(
-        'product.template', "Template", ondelete='CASCADE', select=True)
-    account_expense = fields.Many2One(
-        'account.account', "Account Expense",
-        domain=[
-            ('kind', '=', 'expense'),
-            ('company', '=', Eval('company', -1)),
-            ],
-        depends=['company'])
-    account_revenue = fields.Many2One(
-        'account.account', "Account Revenue",
-        domain=[
-            ('kind', '=', 'revenue'),
-            ('company', '=', Eval('company', -1)),
-            ],
-        depends=['company'])
-
-    @classmethod
-    def __register__(cls, module_name):
-        TableHandler = backend.get('TableHandler')
-        exist = TableHandler.table_exist(cls._table)
-
-        super(TemplateAccount, cls).__register__(module_name)
-
-        if not exist:
-            cls._migrate_property([], [], [])
-
-    @classmethod
-    def _migrate_property(cls, field_names, value_names, fields):
-        field_names.extend(['account_expense', 'account_revenue'])
-        value_names.extend(['account_expense', 'account_revenue'])
-        fields.append('company')
-        migrate_property(
-            'product.template', field_names, cls, value_names,
-            parent='template', fields=fields)
-
-
-class TemplateCustomerTax(ModelSQL):
-    'Product Template - Customer Tax'
-    __name__ = 'product.template-customer-account.tax'
-    _table = 'product_customer_taxes_rel'
-    product = fields.Many2One('product.template', 'Product Template',
-            ondelete='CASCADE', select=True, required=True)
-    tax = fields.Many2One('account.tax', 'Tax', ondelete='RESTRICT',
-            required=True)
-
-
-class TemplateSupplierTax(ModelSQL):
-    'Product Template - Supplier Tax'
-    __name__ = 'product.template-supplier-account.tax'
-    _table = 'product_supplier_taxes_rel'
-    product = fields.Many2One('product.template', 'Product Template',
-            ondelete='CASCADE', select=True, required=True)
-    tax = fields.Many2One('account.tax', 'Tax', ondelete='RESTRICT',
-            required=True)
-
     @property
     def supplier_taxes_used(self):
         taxes = self.get_taxes('supplier_taxes_used')
