@@ -5,8 +5,6 @@ from trytond.pyson import Eval
 from trytond.model import fields
 from trytond.transaction import Transaction
 
-__all__ = ['CreateChart', 'CreateChartProperties']
-
 
 class CreateChartProperties(metaclass=PoolMeta):
     __name__ = 'account.create_chart.properties'
@@ -14,14 +12,14 @@ class CreateChartProperties(metaclass=PoolMeta):
     category_account_expense = fields.Many2One(
         'account.account', 'Default Expense Account',
         domain=[
-            ('kind', '=', 'expense'),
+            ('type.expense', '=', True),
             ('company', '=', Eval('company')),
             ],
         depends=['company'])
     category_account_revenue = fields.Many2One(
         'account.account', 'Default Revenue Account',
         domain=[
-            ('kind', '=', 'revenue'),
+            ('type.revenue', '=', True),
             ('company', '=', Eval('company')),
             ],
         depends=['company'])
@@ -44,3 +42,29 @@ class CreateChart(metaclass=PoolMeta):
                     getattr(self.properties, name, None))
             config.save()
         return state
+
+
+class MoveLine(metaclass=PoolMeta):
+    __name__ = 'account.move.line'
+
+    @property
+    def product(self):
+        pass
+
+    @property
+    def rule_pattern(self):
+        def parents(categories):
+            for category in categories:
+                while category:
+                    yield category
+                    category = category.parent
+
+        pattern = super().rule_pattern
+        if self.product:
+            pattern['product'] = self.product.id
+            pattern['product_categories'] = [
+                c.id for c in parents(self.product.categories_all)]
+        else:
+            pattern['product'] = None
+            pattern['product_categories'] = []
+        return pattern
