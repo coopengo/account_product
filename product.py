@@ -16,16 +16,8 @@ from trytond.modules.company.model import (
 
 from .exceptions import AccountError, TaxError
 
-__all__ = ['Category', 'CategoryAccount',
-    'CategoryCustomerTax', 'CategorySupplierTax',
-    'Template', 'Product', 'account_used', 'template_property',
-    'TemplateAccountCategory', 'TemplateCategoryAll']
-
 
 def account_used(field_name, field_string=None):
-    if field_string is None:
-        field_string = field_name
-
     def decorator(func):
         @wraps(func)
         def wrapper(self):
@@ -34,8 +26,15 @@ def account_used(field_name, field_string=None):
                 account = self.get_account(field_name + '_used')
             # Allow empty values on on_change
             if not account and not Transaction().readonly:
+                Model = self.__class__
+                field = field_name
+                if field_string:
+                    if getattr(self, field_string, None):
+                        Model = getattr(self, field_string).__class__
+                    else:
+                        field = field_string
                 field = (
-                    self.fields_get([field_string])[field_string]['string'])
+                    Model.fields_get([field])[field]['string'])
                 raise AccountError(
                     gettext('account_product.msg_missing_account',
                         field=field,
@@ -71,6 +70,7 @@ class Category(CompanyMultiValueMixin, metaclass=PoolMeta):
         'product.category.account', 'category', "Accounts")
     account_expense = fields.MultiValue(fields.Many2One('account.account',
             'Account Expense', domain=[
+                ('closed', '!=', True),
                 ('type.expense', '=', True),
                 ('company', '=', Eval('context', {}).get('company', -1)),
                 ],
@@ -82,6 +82,7 @@ class Category(CompanyMultiValueMixin, metaclass=PoolMeta):
             depends=['account_parent', 'accounting']))
     account_revenue = fields.MultiValue(fields.Many2One('account.account',
             'Account Revenue', domain=[
+                ('closed', '!=', True),
                 ('type.revenue', '=', True),
                 ('company', '=', Eval('context', {}).get('company', -1)),
                 ],
@@ -183,7 +184,7 @@ class Category(CompanyMultiValueMixin, metaclass=PoolMeta):
         else:
             return [x.id for x in getattr(self, name[:-5])]
 
-    @fields.depends('parent', 'accounting')
+    @fields.depends('parent', '_parent_parent.accounting', 'accounting')
     def on_change_with_accounting(self):
         if self.parent:
             return self.parent.accounting
@@ -244,8 +245,7 @@ class CategoryAccount(ModelSQL, CompanyValueMixin):
 
     @classmethod
     def __register__(cls, module_name):
-        TableHandler = backend.get('TableHandler')
-        exist = TableHandler.table_exist(cls._table)
+        exist = backend.TableHandler.table_exist(cls._table)
 
         super(CategoryAccount, cls).__register__(module_name)
 
