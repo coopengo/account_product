@@ -126,6 +126,17 @@ class Category(CompanyMultiValueMixin, metaclass=PoolMeta):
             },
         depends=['taxes_parent', 'accounting'],
         help="The taxes to apply when purchasing products of this category.")
+    supplier_taxes_deductible_rate = fields.Numeric(
+        "Supplier Taxes Deductible Rate", digits=(14, 10),
+        domain=[
+            ('supplier_taxes_deductible_rate', '>=', 0),
+            ('supplier_taxes_deductible_rate', '<=', 1),
+            ],
+        states={
+            'invisible': (
+                Eval('taxes_parent') | ~Eval('accounting', False)),
+            },
+        depends=['taxes_parent', 'accounting'])
     customer_taxes_used = fields.Function(fields.Many2Many(
             'account.tax', None, None, "Customer Taxes Used"), 'get_taxes')
     supplier_taxes_used = fields.Function(fields.Many2Many(
@@ -172,6 +183,10 @@ class Category(CompanyMultiValueMixin, metaclass=PoolMeta):
             'default_category_account_revenue', **pattern)
         return account.id if account else None
 
+    @classmethod
+    def default_supplier_taxes_deductible_rate(cls):
+        return 1
+
     def get_account(self, name, **pattern):
         if self.account_parent:
             return self.parent.get_account(name, **pattern)
@@ -189,6 +204,19 @@ class Category(CompanyMultiValueMixin, metaclass=PoolMeta):
         if self.parent:
             return self.parent.accounting
         return self.accounting
+
+    @fields.depends(
+        'accounting',
+        'account_parent', 'account_expense', 'account_revenue',
+        'taxes_parent', 'customer_taxes', 'supplier_taxes')
+    def on_change_accounting(self):
+        if not self.accounting:
+            self.account_parent = None
+            self.account_expense = None
+            self.account_revenue = None
+            self.taxes_parent = None
+            self.customer_taxes = None
+            self.supplier_taxes = None
 
     @fields.depends('account_expense')
     def on_change_account_expense(self):
@@ -222,12 +250,23 @@ class Category(CompanyMultiValueMixin, metaclass=PoolMeta):
     def account_revenue_used(self):
         pass
 
+    @property
+    def supplier_taxes_deductible_rate_used(self):
+        if self.taxes_parent:
+            return self.parent.supplier_taxes_deductible_rate_used
+        else:
+            return self.supplier_taxes_deductible_rate
+
 
 class CategoryAccount(ModelSQL, CompanyValueMixin):
     "Category Account"
     __name__ = 'product.category.account'
     category = fields.Many2One(
-        'product.category', "Category", ondelete='CASCADE', select=True)
+        'product.category', "Category", ondelete='CASCADE', select=True,
+        context={
+            'company': Eval('company', -1),
+            },
+        depends=['company'])
     account_expense = fields.Many2One(
         'account.account', "Account Expense",
         domain=[
@@ -271,6 +310,11 @@ class CategoryCustomerTax(ModelSQL):
     tax = fields.Many2One('account.tax', 'Tax', ondelete='RESTRICT',
             required=True)
 
+    @classmethod
+    def __setup__(cls):
+        super().__setup__()
+        cls.__access__.add('tax')
+
 
 class CategorySupplierTax(ModelSQL):
     'Category - Supplier Tax'
@@ -280,6 +324,11 @@ class CategorySupplierTax(ModelSQL):
             ondelete='CASCADE', select=True, required=True)
     tax = fields.Many2One('account.tax', 'Tax', ondelete='RESTRICT',
             required=True)
+
+    @classmethod
+    def __setup__(cls):
+        super().__setup__()
+        cls.__access__.add('tax')
 
 
 class Template(CompanyMultiValueMixin, metaclass=PoolMeta):
@@ -341,6 +390,10 @@ class Template(CompanyMultiValueMixin, metaclass=PoolMeta):
                         name=self.rec_name))
         return taxes
 
+    @property
+    def supplier_taxes_deductible_rate_used(self):
+        return self.get_taxes('supplier_taxes_deductible_rate_used')
+
 
 class Product(metaclass=PoolMeta):
     __name__ = 'product.product'
@@ -348,6 +401,8 @@ class Product(metaclass=PoolMeta):
     account_revenue_used = template_property('account_revenue_used')
     customer_taxes_used = template_property('customer_taxes_used')
     supplier_taxes_used = template_property('supplier_taxes_used')
+    supplier_taxes_deductible_rate_used = template_property(
+        'supplier_taxes_deductible_rate_used')
 
 
 class TemplateAccountCategory(ModelSQL):
