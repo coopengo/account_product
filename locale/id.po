@@ -68,6 +68,10 @@ msgctxt "field:product.category,supplier_taxes:"
 msgid "Supplier Taxes"
 msgstr ""
 
+msgctxt "field:product.category,supplier_taxes_deductible_rate:"
+msgid "Supplier Taxes Deductible Rate"
+msgstr ""
+
 msgctxt "field:product.category,supplier_taxes_used:"
 msgid "Supplier Taxes Used"
 msgstr ""
@@ -122,7 +126,7 @@ msgstr "Kategori"
 
 msgctxt "field:product.template-product.category.account,template:"
 msgid "Template"
-msgstr ""
+msgstr "Templat"
 
 msgctxt "help:product.category,account_parent:"
 msgid "Use the accounts defined on the parent category."
@@ -156,17 +160,9 @@ msgctxt "model:ir.rule.group,name:rule_group_category_accounting"
 msgid "Any category"
 msgstr ""
 
-msgctxt "model:ir.rule.group,name:rule_group_category_customer_taxes"
-msgid "User in company"
-msgstr "Pengguna di dalam perusahaan"
-
 msgctxt "model:ir.rule.group,name:rule_group_category_default"
 msgid "Not accounting category"
 msgstr ""
-
-msgctxt "model:ir.rule.group,name:rule_group_category_supplier_taxes"
-msgid "User in company"
-msgstr "Pengguna di dalam perusahaan"
 
 msgctxt "model:product.category-customer-account.tax,name:"
 msgid "Category - Customer Tax"
@@ -185,8 +181,8 @@ msgid "Template - Account Category"
 msgstr ""
 
 msgctxt "view:account.configuration:"
-msgid "Category"
-msgstr "Kategori"
+msgid "Product"
+msgstr "Produk"
 
 msgctxt "view:account.create_chart.properties:"
 msgid "Category"
